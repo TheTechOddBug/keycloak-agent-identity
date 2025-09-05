@@ -443,6 +443,12 @@ class KeycloakSetup:
                     "directAccessGrantsEnabled": client_config.get('directAccessGrantsEnabled', False)
                 })
                 
+            # Add redirectUris and webOrigins for both client types if specified
+            if 'redirectUris' in client_config:
+                client_data["redirectUris"] = client_config['redirectUris']
+            if 'webOrigins' in client_config:
+                client_data["webOrigins"] = client_config['webOrigins']
+                
             # Set fullScopeAllowed from config (defaults to true if not specified)
             if 'fullScopeAllowed' in client_config:
                 client_data["fullScopeAllowed"] = client_config['fullScopeAllowed']
