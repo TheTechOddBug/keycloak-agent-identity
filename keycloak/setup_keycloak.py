@@ -615,6 +615,167 @@ class KeycloakSetup:
             self.log('ERROR', f'Failed to create role {role_name} in client {client_id}: {e}')
             return False
             
+    def create_realm_role(self, realm_name: str, role_config: Dict[str, Any]) -> bool:
+        """Create a realm role."""
+        role_name = role_config['name']
+        self.log('INFO', f'Creating realm role: {role_name}...')
+        
+        try:
+            # Check if role exists
+            if self.get_realm_role(realm_name, role_name):
+                self.log('WARNING', f'Realm role {role_name} already exists, skipping creation')
+                return True
+                
+            # Create role with proper payload structure
+            role_data = {
+                "name": role_name,
+                "description": role_config.get('description', ''),
+                "composite": role_config.get('composite', False),
+                "clientRole": False,  # Always false for realm roles
+                "attributes": role_config.get('attributes', {})
+            }
+            
+            if self.debug:
+                self.log('DEBUG', f'Realm role data: {json.dumps(role_data, indent=2)}')
+            
+            response = self.session.post(
+                f"{self.admin_base_url}/realms/{realm_name}/roles",
+                json=role_data
+            )
+            
+            if response.status_code == 201:
+                self.log('SUCCESS', f'Realm role {role_name} created')
+                return True
+            elif response.status_code == 409:
+                self.log('WARNING', f'Realm role {role_name} already exists, skipping creation')
+                return True
+            else:
+                self.log('ERROR', f'Failed to create realm role. Status: {response.status_code}')
+                self.log('ERROR', f'Response: {response.text}')
+                return False
+            
+        except requests.exceptions.RequestException as e:
+            self.log('ERROR', f'Failed to create realm role {role_name}: {e}')
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_detail = e.response.json()
+                    self.log('ERROR', f'Error details: {error_detail}')
+                except:
+                    self.log('ERROR', f'Error response: {e.response.text}')
+            return False
+            
+    def get_realm_role(self, realm_name: str, role_name: str) -> Optional[Dict[str, Any]]:
+        """Get realm role details by name."""
+        try:
+            response = self.session.get(
+                f"{self.admin_base_url}/realms/{realm_name}/roles/{role_name}"
+            )
+            if response.status_code == 200:
+                return response.json()
+            elif response.status_code == 404:
+                return None
+            else:
+                self.log('ERROR', f'Failed to get realm role {role_name}. Status: {response.status_code}')
+                return None
+                
+        except requests.exceptions.RequestException as e:
+            self.log('ERROR', f'Failed to get realm role {role_name}: {e}')
+            return None
+            
+    def assign_realm_role_to_user(self, realm_name: str, username: str, role_name: str) -> bool:
+        """Assign a realm role to a user."""
+        self.log('INFO', f'Assigning realm role {role_name} to user {username}...')
+        
+        try:
+            user_uuid = self.get_user_uuid(realm_name, username)
+            role_data = self.get_realm_role(realm_name, role_name)
+            
+            if not user_uuid:
+                self.log('ERROR', f'User {username} not found')
+                return False
+                
+            if not role_data:
+                self.log('ERROR', f'Realm role {role_name} not found')
+                return False
+                
+            # Check if role is already assigned
+            response = self.session.get(
+                f"{self.admin_base_url}/realms/{realm_name}/users/{user_uuid}/role-mappings/realm"
+            )
+            response.raise_for_status()
+            
+            assigned_roles = response.json()
+            if any(role['name'] == role_name for role in assigned_roles):
+                self.log('WARNING', f'Realm role {role_name} already assigned to user {username}, skipping')
+                return True
+                
+            # Assign role
+            response = self.session.post(
+                f"{self.admin_base_url}/realms/{realm_name}/users/{user_uuid}/role-mappings/realm",
+                json=[role_data]
+            )
+            response.raise_for_status()
+            
+            self.log('SUCCESS', f'Realm role {role_name} assigned to user {username}')
+            return True
+            
+        except requests.exceptions.RequestException as e:
+            self.log('ERROR', f'Failed to assign realm role {role_name} to user {username}: {e}')
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_detail = e.response.json()
+                    self.log('ERROR', f'Error details: {error_detail}')
+                except:
+                    self.log('ERROR', f'Error response: {e.response.text}')
+            return False
+            
+    def add_realm_role_scope_mapping(self, realm_name: str, scope_name: str, role_name: str) -> bool:
+        """Add a realm role scope mapping to a client scope."""
+        self.log('INFO', f'Adding realm role {role_name} scope mapping to scope {scope_name}...')
+        
+        try:
+            scope_id = self.get_client_scope_id(realm_name, scope_name)
+            role_data = self.get_realm_role(realm_name, role_name)
+            
+            if not scope_id:
+                self.log('ERROR', f'Client scope {scope_name} not found')
+                return False
+                
+            if not role_data:
+                self.log('ERROR', f'Realm role {role_name} not found')
+                return False
+                
+            # Check if realm role mapping already exists
+            response = self.session.get(
+                f"{self.admin_base_url}/realms/{realm_name}/client-scopes/{scope_id}/scope-mappings/realm"
+            )
+            response.raise_for_status()
+            
+            existing_mappings = response.json()
+            if any(mapping['name'] == role_name for mapping in existing_mappings):
+                self.log('WARNING', f'Realm role {role_name} already mapped to scope {scope_name}, skipping')
+                return True
+                
+            # Add realm role scope mapping
+            response = self.session.post(
+                f"{self.admin_base_url}/realms/{realm_name}/client-scopes/{scope_id}/scope-mappings/realm",
+                json=[role_data]
+            )
+            response.raise_for_status()
+            
+            self.log('SUCCESS', f'Realm role {role_name} mapped to client scope {scope_name}')
+            return True
+            
+        except requests.exceptions.RequestException as e:
+            self.log('ERROR', f'Failed to add realm role {role_name} scope mapping to scope {scope_name}: {e}')
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_detail = e.response.json()
+                    self.log('ERROR', f'Error details: {error_detail}')
+                except:
+                    self.log('ERROR', f'Error response: {e.response.text}')
+            return False
+            
     def add_client_protocol_mapper(self, realm_name: str, client_id: str, mapper_config: Dict[str, Any]) -> bool:
         """Add a protocol mapper to a client."""
         mapper_name = mapper_config['name']
@@ -1050,7 +1211,13 @@ class KeycloakSetup:
         if not self.create_realm(config['realm']):
             return False
             
-        # Step 2: Create client scopes (without role mappings)
+        # Step 2: Create realm roles
+        self.log('INFO', 'Creating realm roles...')
+        for role in config.get('realmRoles', []):
+            if not self.create_realm_role(realm_name, role):
+                return False
+                
+        # Step 3: Create client scopes (without role mappings)
         self.log('INFO', 'Creating client scopes...')
         for scope in config.get('clientScopes', []):
             # Remove roles before creating the scope
@@ -1059,13 +1226,13 @@ class KeycloakSetup:
             if not self.create_client_scope(realm_name, scope_copy):
                 return False
                 
-        # Step 3: Create clients
+        # Step 4: Create clients
         self.log('INFO', 'Creating clients...')
         for client in config.get('clients', []):
             if not self.create_client(realm_name, client):
                 return False
                 
-        # Step 4: Assign client scopes to clients
+        # Step 5: Assign client scopes to clients
         self.log('INFO', 'Assigning client scopes to clients...')
         for client in config.get('clients', []):
             client_id = client['clientId']
@@ -1080,11 +1247,14 @@ class KeycloakSetup:
                 if not self.assign_client_scope(realm_name, client_id, scope_name, 'optional'):
                     self.log('WARNING', f'Failed to assign optional scope {scope_name} to client {client_id}')
                     
-        # Step 5: Add role scope mappings (second pass)
+        # Step 6: Add role scope mappings (second pass)
         self.log('INFO', 'Adding role scope mappings to client scopes...')
         for scope in config.get('clientScopes', []):
+            scope_name = scope['name']
+            
+            # Handle client role mappings
             if 'roles' in scope and scope['roles']:
-                scope_id = self.get_client_scope_id(realm_name, scope['name'])
+                scope_id = self.get_client_scope_id(realm_name, scope_name)
                 if scope_id:
                     for role_assoc in scope['roles']:
                         client = role_assoc['client']
@@ -1111,19 +1281,34 @@ class KeycloakSetup:
                                 json=[role_data]
                             )
                             if response.status_code not in (204, 201):
-                                self.log('ERROR', f'Failed to add scope mapping for role {role} to scope {scope['name']}: {response.text}')
+                                self.log('ERROR', f'Failed to add scope mapping for role {role} to scope {scope_name}: {response.text}')
                             else:
-                                self.log('SUCCESS', f'Added scope mapping: {role} to client scope {scope['name']}')
+                                self.log('SUCCESS', f'Added scope mapping: {role} to client scope {scope_name}')
                         except requests.exceptions.RequestException as e:
-                            self.log('ERROR', f'Failed to add scope mapping for role {role} to scope {scope['name']}: {e}')
+                            self.log('ERROR', f'Failed to add scope mapping for role {role} to scope {scope_name}: {e}')
+            
+            # Handle realm role mappings
+            if 'realmRoles' in scope and scope['realmRoles']:
+                for role_name in scope['realmRoles']:
+                    if not self.add_realm_role_scope_mapping(realm_name, scope_name, role_name):
+                        self.log('WARNING', f'Failed to add realm role {role_name} scope mapping to scope {scope_name}')
         
-        # Step 6: Create users
+        # Step 7: Create users
         self.log('INFO', 'Creating users...')
         for user in config.get('users', []):
             if not self.create_user(realm_name, user):
                 return False
                 
-        # Step 7: Set up authentication flows
+        # Step 8: Assign realm roles to users
+        self.log('INFO', 'Assigning realm roles to users...')
+        for user in config.get('users', []):
+            username = user['username']
+            if 'realmRoles' in user:
+                for role_name in user['realmRoles']:
+                    if not self.assign_realm_role_to_user(realm_name, username, role_name):
+                        self.log('WARNING', f'Failed to assign realm role {role_name} to user {username}')
+                
+        # Step 9: Set up authentication flows
         self.log('INFO', 'Setting up authentication flows...')
         if 'authenticationFlows' in config:
             if not self.setup_authentication_flows(realm_name, config['authenticationFlows']):
@@ -1171,10 +1356,22 @@ class KeycloakSetup:
         print(f"\n{Colors.WHITE}Client Scopes:{Colors.NC}")
         for scope in config.get('clientScopes', []):
             print(f"  • {scope['name']}: {scope['description']}")
+            if 'realmRoles' in scope and scope['realmRoles']:
+                print(f"    - Realm role mappings: {', '.join(scope['realmRoles'])}")
+            if 'roles' in scope and scope['roles']:
+                print(f"    - Client role mappings:")
+                for role_assoc in scope['roles']:
+                    print(f"      • {role_assoc['client']}: {role_assoc['role']}")
+            
+        print(f"\n{Colors.WHITE}Realm Roles:{Colors.NC}")
+        for role in config.get('realmRoles', []):
+            print(f"  • {role['name']}: {role.get('description', 'No description')}")
             
         print(f"\n{Colors.WHITE}Users:{Colors.NC}")
         for user in config.get('users', []):
             print(f"  • {user['username']} ({user['email']})")
+            if 'realmRoles' in user:
+                print(f"    - Realm roles: {', '.join(user['realmRoles'])}")
             if 'clientRoles' in user:
                 for client_id, roles in user['clientRoles'].items():
                     print(f"    - {client_id}: {', '.join(roles)}")

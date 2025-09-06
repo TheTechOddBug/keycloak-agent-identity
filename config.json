@@ -153,6 +153,20 @@
       ]
     }
   ],
+  "realmRoles": [
+    {
+      "name": "admin",
+      "description": "Realm administrator with full access"
+    },
+    {
+      "name": "user",
+      "description": "Standard user role"
+    },
+    {
+      "name": "auditor",
+      "description": "Read-only access for auditing purposes"
+    }
+  ],
   "clientScopes": [
     {
       "name": "echo-mcp-server-audience",
@@ -182,6 +196,7 @@
         "include.in.token.scope": "true",
         "display.on.consent.screen": "true"
       },
+      "realmRoles": ["user", "auditor"],
       "roles": [
         {
           "client": "echo-mcp-server",
@@ -197,6 +212,7 @@
         "include.in.token.scope": "true",
         "display.on.consent.screen": "true"
       },
+      "realmRoles": ["admin", "user"],
       "roles": [
         {
           "client": "echo-mcp-server",
@@ -230,6 +246,7 @@
       "emailVerified": true,
       "password": "admin123",
       "temporary": false,
+      "realmRoles": ["admin", "user"],
       "clientRoles": {
         "echo-mcp-server": ["tools", "prompts", "read-only"]
       }
@@ -243,6 +260,7 @@
       "emailVerified": true,
       "password": "user123",
       "temporary": false,
+      "realmRoles": ["user"],
       "clientRoles": {
         "echo-mcp-server": ["tools", "read-only"]
       }
@@ -256,6 +274,7 @@
       "emailVerified": true,
       "password": "readonly123",
       "temporary": false,
+      "realmRoles": ["auditor"],
       "clientRoles": {
         "echo-mcp-server": ["read-only"]
       }
