@@ -1220,9 +1220,10 @@ class KeycloakSetup:
         # Step 3: Create client scopes (without role mappings)
         self.log('INFO', 'Creating client scopes...')
         for scope in config.get('clientScopes', []):
-            # Remove roles before creating the scope
+            # Remove role mappings before creating the scope (they're handled separately)
             scope_copy = dict(scope)
             scope_copy.pop('roles', None)
+            scope_copy.pop('realmRoles', None)
             if not self.create_client_scope(realm_name, scope_copy):
                 return False
                 
