@@ -68,3 +68,23 @@ To run a test of the client authentication:
 ```bash
 ./spire/test-spiffe-authentication.sh
 ```
+
+## Run on Kubernetes
+
+First install the right config.json:
+
+```bash
+kubectl create configmap keycloak-config --from-file=config.json=config.json
+```
+
+Example:
+
+```bash
+kubectl create configmap keycloak-config --from-file=config.json=/Users/christian.posta/python/agent-auth-istio-keycloak/keycloak/config.json
+```
+
+Then install keycloak and setup helper job:
+
+```bash
+kubectl apply -f k8s-deployment.yaml
+```
